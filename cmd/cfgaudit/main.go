@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -2004,6 +2005,11 @@ func parseSettingsOptional(path string) (*parser.Settings, error) {
 // not being scanned rather than silently trusting it.
 func loadProjectMCP(dir string) (map[string]parser.MCPServer, string, error) {
 	path := filepath.Join(dir, ".mcp.json")
+	// An empty .mcp.json declares no servers: Claude Code 2.1.299 stopped reporting
+	// it as invalid, and `claude mcp list` shows no error (#746).
+	if data, err := scanroot.ReadFile(path); err == nil && len(bytes.TrimSpace(data)) == 0 {
+		return nil, "", nil
+	}
 	servers, err := loadMCPConfigOptional(path)
 	if err != nil {
 		return nil, "", err

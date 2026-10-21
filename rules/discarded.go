@@ -4,6 +4,8 @@
 package rules
 
 import (
+	"encoding/json"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -25,7 +27,7 @@ type SchemaTypeMismatch struct {
 //
 // Only the top level is examined, because that is where the consequence lives:
 // see SettingsDiscarded.
-func SettingsTypeMismatches(s *parser.Settings) []SchemaTypeMismatch {
+func SettingsTypeMismatches(s *parser.Settings, ver *version.Version) []SchemaTypeMismatch {
 	if s == nil || len(s.Raw) == 0 {
 		return nil
 	}
@@ -46,11 +48,35 @@ func SettingsTypeMismatches(s *parser.Settings) []SchemaTypeMismatch {
 			continue
 		}
 		actual := jsonTypeOf(s.Raw[k])
-		if !stringInSlice(actual, ps.AllowedTypes) {
+		if !stringInSlice(actual, ps.AllowedTypes) && !singleServerName(k, s.Raw[k], ver) {
 			out = append(out, SchemaTypeMismatch{Key: k, Actual: actual, Allowed: ps.AllowedTypes})
 		}
 	}
 	return out
+}
+
+// singleServerNameMinVersion is the Claude Code release that stopped discarding a
+// settings file whose enabledMcpjsonServers or disabledMcpjsonServers holds one
+// server name as a plain string: "Fixed a settings file being ignored when ...
+// held a single server name (letters, digits, - or _) as a plain string" (#746).
+// Measured on 2.1.304 with a SessionStart hook: "github" and ["github"] load,
+// "*" is still dropped.
+var singleServerNameMinVersion = version.Version{Major: 2, Minor: 1, Patch: 299}
+
+var serverNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+// singleServerName reports whether raw is enabledMcpjsonServers or
+// disabledMcpjsonServers written as one server name, which Claude Code accepts
+// from 2.1.299. An unknown version takes the reading that the file loads.
+func singleServerName(key string, raw json.RawMessage, ver *version.Version) bool {
+	if key != "enabledMcpjsonServers" && key != "disabledMcpjsonServers" {
+		return false
+	}
+	if ver != nil && !ver.AtLeast(singleServerNameMinVersion) {
+		return false
+	}
+	var name string
+	return json.Unmarshal(raw, &name) == nil && serverNamePattern.MatchString(name)
 }
 
 // SettingsDiscarded reports whether Claude Code drops this settings file whole
@@ -90,7 +116,7 @@ func SettingsTypeMismatches(s *parser.Settings) []SchemaTypeMismatch {
 // GuardHookDefects for the measured boundary. ver gates the defects that only
 // became one in a later release; nil takes the reading that reports.
 func SettingsDiscarded(s *parser.Settings, ver *version.Version) bool {
-	return len(SettingsTypeMismatches(s)) > 0 || len(GuardHookDefects(s, ver)) > 0
+	return len(SettingsTypeMismatches(s, ver)) > 0 || len(GuardHookDefects(s, ver)) > 0
 }
 
 // discarded reports whether this target's settings file is one Claude Code drops
@@ -123,7 +149,7 @@ func discardedNote(t *Target) string {
 		return ""
 	}
 	var keys []string
-	for _, m := range SettingsTypeMismatches(t.Settings) {
+	for _, m := range SettingsTypeMismatches(t.Settings, t.ClaudeVersion) {
 		keys = append(keys, "\""+m.Key+"\"")
 	}
 	var why string

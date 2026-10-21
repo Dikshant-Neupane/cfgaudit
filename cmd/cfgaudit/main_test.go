@@ -2968,6 +2968,22 @@ func TestBuildTargets_UnreadableRecordIsPerScan(t *testing.T) {
 	}
 }
 
+// #746: an empty or whitespace-only root .mcp.json declares no servers. Claude
+// Code 2.1.299 stopped reporting it as invalid, so it is not a CFG109 file.
+func TestBuildTargets_EmptyRootMCPIsNotUnreadable(t *testing.T) {
+	for _, body := range []string{"", " \n\t\n"} {
+		proj := t.TempDir()
+		mustWrite(t, filepath.Join(proj, ".mcp.json"), body)
+		targets, err := buildTargets(proj, false)
+		if err != nil {
+			t.Fatalf("buildTargets: %v", err)
+		}
+		if ruleIDsPresent(runAll(targets))["CFG109"] {
+			t.Errorf("an .mcp.json of %q must not be reported as unreadable", body)
+		}
+	}
+}
+
 // #614: a root .mcp.json without the mcpServers wrapper is read on a target of
 // its own (VS Code 1.139+ loads it, Claude Code rejects it); the wrapped file
 // stays on the project target.

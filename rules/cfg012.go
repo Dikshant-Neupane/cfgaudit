@@ -55,7 +55,7 @@ func (r *cfg012) Check(t *Target) []finding.Finding {
 			continue
 		}
 		actual := jsonTypeOf(t.Settings.Raw[k])
-		if !stringInSlice(actual, ps.AllowedTypes) {
+		if !stringInSlice(actual, ps.AllowedTypes) && !singleServerName(k, t.Settings.Raw[k], t.ClaudeVersion) {
 			findings = append(findings, finding.Finding{
 				RuleID:   "CFG012",
 				Severity: finding.Error,

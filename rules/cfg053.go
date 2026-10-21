@@ -71,8 +71,16 @@ func decodeStringList(b json.RawMessage) []string {
 		return nil
 	}
 	var out []string
-	_ = json.Unmarshal(b, &out)
-	return out
+	if json.Unmarshal(b, &out) == nil {
+		return out
+	}
+	// One server name as a plain string reads as a one-item list (#746); "*" as a
+	// string is not accepted upstream, so it is not read here either.
+	var name string
+	if json.Unmarshal(b, &name) == nil && serverNamePattern.MatchString(name) {
+		return []string{name}
+	}
+	return nil
 }
 
 func containsWildcard(list []string) bool {
