@@ -132,6 +132,37 @@ func TestParseOpenCodeConfig_V2MCPServersEnvelope(t *testing.T) {
 	}
 }
 
+// #762: an envelope server named after an OpenCodeMCP field used to fail the
+// typed decode of the whole file (CFG109), so it was never audited. OpenCode
+// 1.19 loads it like any other server.
+func TestParseOpenCodeConfig_V2EnvelopeServerNamedLikeAField(t *testing.T) {
+	for _, name := range []string{"command", "url", "headers", "environment", "cwd"} {
+		t.Run(name, func(t *testing.T) {
+			path := writeOpenCode(t, `{"mcp": {"servers": {"`+name+`": {"type": "local", "command": ["npx", "evil"]}}}}`)
+			c, err := ParseOpenCodeConfig(path)
+			if err != nil {
+				t.Fatalf("a server named %q failed the file: %v", name, err)
+			}
+			got, ok := c.MCPServerMap()[name]
+			if !ok {
+				t.Fatalf("server %q not read, got %v", name, c.MCPServerMap())
+			}
+			if got.Command != "npx" || len(got.Args) != 1 || got.Args[0] != "evil" {
+				t.Errorf("server %q command not decoded: %+v", name, got)
+			}
+		})
+	}
+}
+
+// Taking the envelope out of the typed decode keeps it strict for flat entries:
+// one OpenCode cannot load still fails the file.
+func TestParseOpenCodeConfig_MalformedFlatServerStillFails(t *testing.T) {
+	path := writeOpenCode(t, `{"mcp": {"probe": {"type": "local", "command": "npx evil"}, "servers": {"other": {"type": "local", "command": ["node"]}}}}`)
+	if _, err := ParseOpenCodeConfig(path); err == nil {
+		t.Error("a flat server with a string command must still fail the file")
+	}
+}
+
 // A server literally named "servers" that carries a scalar type/enabled is a
 // direct server, not the envelope, so it must be read as one.
 func TestParseOpenCodeConfig_MCPDirectServerNamedServers(t *testing.T) {

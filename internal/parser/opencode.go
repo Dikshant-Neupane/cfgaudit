@@ -236,12 +236,48 @@ func ParseOpenCodeConfig(path string) (*OpenCodeConfig, error) {
 	}
 
 	var c OpenCodeConfig
-	if err := json.Unmarshal(clean, &c); err != nil {
+	if err := json.Unmarshal(withoutMCPEnvelope(clean, top), &c); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
 	lowerOpenCodeV2(top, &c)
 	return &c, nil
+}
+
+// withoutMCPEnvelope returns the config with the v2 `mcp.servers` envelope taken
+// out, for the typed decode. lowerOpenCodeMCP decodes the envelope's servers one
+// by one; decoded as a single `mcp` entry instead, a server named after an
+// OpenCodeMCP field (`command`, `url`, `headers`, `environment`, `cwd`) failed the
+// whole file, so none of its servers was audited (#762). Flat entries stay in, so
+// a malformed one still fails the file.
+func withoutMCPEnvelope(clean []byte, top map[string]json.RawMessage) []byte {
+	raw, ok := top["mcp"]
+	if !ok {
+		return clean
+	}
+	var entries map[string]json.RawMessage
+	if json.Unmarshal(raw, &entries) != nil {
+		return clean
+	}
+	servers, ok := entries["servers"]
+	if !ok || openCodeIsDirectServer(servers) {
+		return clean
+	}
+	delete(entries, "servers")
+	mcp, err := json.Marshal(entries)
+	if err != nil {
+		return clean
+	}
+	stripped := make(map[string]json.RawMessage, len(top))
+	for key, value := range top {
+		stripped[key] = value
+	}
+	stripped["mcp"] = mcp
+	out, err := json.Marshal(stripped)
+	if err != nil {
+		return clean
+	}
+	return out
 }
 
 // openCodeHasV2Permissions reports whether the config carries a v2 `permissions`
