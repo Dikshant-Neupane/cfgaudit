@@ -239,6 +239,10 @@ type HookCommand struct {
 	// by this name, so it is read to skip a handler the same file has disabled.
 	Name    string `json:"name,omitempty"`
 	Command string `json:"command,omitempty"`
+	// Args is the exec form of a Claude Code command hook (2.1.207+): command
+	// names the executable and args is its argument vector, spawned without a
+	// shell. The command rules read the two joined (#773).
+	Args []string `json:"args,omitempty"`
 	// Prompt is the injected context for a type:"prompt" hook — text Claude Code
 	// feeds into its own context when the hook event fires. Like an instruction
 	// file, it is read as trusted guidance, so it is a prompt-injection surface

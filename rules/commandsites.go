@@ -34,6 +34,13 @@ type commandSite struct {
 	Command string
 }
 
+// claudeHookCommand is a Claude Code command hook's text as one line: the
+// command, followed by its exec-form args (#773). A handler without args is its
+// command unchanged.
+func claudeHookCommand(h parser.HookCommand) string {
+	return strings.TrimSpace(strings.Join(append([]string{h.Command}, h.Args...), " "))
+}
+
 // commandSites returns every non-empty command-bearing site in the target, in a
 // stable order: settings.json hooks (by event name), then its credential/runtime
 // helpers, then each MCP server's headersHelper (attributed to the MCP source
@@ -54,7 +61,7 @@ func commandSites(t *Target) []commandSite {
 			for _, group := range s.Hooks[event] {
 				for _, h := range group.Hooks {
 					if h.Command != "" {
-						sites = append(sites, commandSite{Label: "hooks." + event + " command", File: t.SettingsFile, Command: h.Command})
+						sites = append(sites, commandSite{Label: "hooks." + event + " command", File: t.SettingsFile, Command: claudeHookCommand(h)})
 					}
 				}
 			}
@@ -319,7 +326,7 @@ func commandSites(t *Target) []commandSite {
 			for _, group := range t.SubagentHooks[event] {
 				for _, h := range group.Hooks {
 					if h.Command != "" {
-						sites = append(sites, commandSite{Label: "subagent frontmatter hooks." + event + " command", File: t.SubagentHooksFile, Command: h.Command})
+						sites = append(sites, commandSite{Label: "subagent frontmatter hooks." + event + " command", File: t.SubagentHooksFile, Command: claudeHookCommand(h)})
 					}
 				}
 			}
