@@ -9,6 +9,7 @@
   <a href="#verifying-a-release"><img src="https://slsa.dev/images/gh-badge-level3.svg" alt="SLSA Build Level 3"></a>
   <a href="https://github.com/marketplace/actions/cfgaudit"><img src="https://img.shields.io/badge/GitHub_Marketplace-cfgaudit-2088FF?logo=githubactions&logoColor=white" alt="GitHub Marketplace"></a>
   <a href="https://gitlab.com/explore/catalog/cfgaudit/cfgaudit"><img src="https://img.shields.io/badge/GitLab_CI%2FCD_Catalog-cfgaudit-FC6D26?logo=gitlab&logoColor=white" alt="GitLab CI/CD Catalog"></a>
+  <a href="#badge"><img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/cfgaudit/cfgaudit/main/assets/badge/v1.json" alt="agent security: cfgaudit"></a>
 </p>
 
 # cfgaudit
@@ -842,6 +843,23 @@ Real-world `settings.json` examples live under `testdata/settings/`:
 `rules/fixtures_test.go` enforces both invariants on every Go test run, so fixtures and rule implementations stay in lockstep.
 
 A separate workflow (`.github/workflows/schema-validation.yml`) validates every file in `valid/` against the [SchemaStore Claude Code settings schema](https://json.schemastore.org/claude-code-settings.json) on push, on pull request, and nightly. If the upstream schema changes, the nightly run opens (or comments on) a tracking issue so the fixtures and rules can be brought back in sync before silent breakage.
+
+---
+
+## Badge
+
+Using cfgaudit on your project? Show it in your README:
+
+[![agent security: cfgaudit](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/cfgaudit/cfgaudit/main/assets/badge/v1.json)](https://github.com/cfgaudit/cfgaudit)
+
+```markdown
+[![agent security: cfgaudit](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/cfgaudit/cfgaudit/main/assets/badge/v1.json)](https://github.com/cfgaudit/cfgaudit)
+```
+
+To show it on a GitLab project page, add it under **Settings → General → Badges** with:
+
+- **Link**: `https://github.com/cfgaudit/cfgaudit`
+- **Badge image URL**: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/cfgaudit/cfgaudit/main/assets/badge/v1.json`
 
 ---
 
