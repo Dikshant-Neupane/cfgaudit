@@ -68,6 +68,18 @@ type Target struct {
 	InstructionFile    string
 	InstructionContent string
 
+	// ImportChain is set on a target for a file that Claude Code loads through
+	// `@path` imports rather than by name (#794): the instruction file that
+	// starts the chain, each file in between, and this file, as paths relative
+	// to the scanned directory. Run names the chain in every finding on the
+	// file, since the file itself does not look like agent configuration.
+	ImportChain []string
+
+	// ExternalImports are the `@path` imports in InstructionFile that resolve
+	// outside the scanned directory, as written (CFG116). cfgaudit does not
+	// read them.
+	ExternalImports []string
+
 	// ContentPath marks a target for a file that content-paths lists (#795): a
 	// README or doc page, not an instruction file. Run applies only
 	// ContentPathRules to it and reports at most warn.
