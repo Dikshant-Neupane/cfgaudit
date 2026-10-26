@@ -587,9 +587,9 @@ const fixedIn11362 = " VS Code 1.136.2 and later read this only from user settin
 //     agent to a host the repository chose; a workspace localFilePermissions map
 //     grants such a host files on the machine.
 //   - github.copilot.chat.workspace.prototypeAdoCodeSearchEndpointOverride and
-//     its legacy ...advanced... spelling (CVE-2026-81381, fix f94e10b "Remove
-//     configurable Azure DevOps code search endpoint override"): the Azure DevOps
-//     token was sent to the configured URL; the setting no longer exists.
+//     its legacy ...advanced... spelling (CVE-2026-81381 / f94e10b, and
+//     CVE-2026-102231 / e57527e): the Azure DevOps token was sent to the
+//     configured URL; the setting no longer exists.
 //   - terminal.integrated.allowInUntrustedWorkspace in nested-object form: the
 //     key is restricted, so a flat workspace value is ignored exactly in the
 //     untrusted workspace it would matter in, and is not reported; the nested
@@ -609,7 +609,7 @@ func (r *cfg048) checkFixedKeys(t *Target) []finding.Finding {
 	}
 	for _, key := range []string{"github.copilot.chat.workspace.prototypeAdoCodeSearchEndpointOverride", "github.copilot.chat.advanced.workspace.prototypeAdoCodeSearchEndpointOverride"} {
 		if v, ok := s.StringField(key); ok && strings.TrimSpace(v) != "" {
-			add(finding.Warn, key+" is \""+strings.TrimSpace(v)+"\" — Copilot sent the Azure DevOps access token to this endpoint for code search (CVE-2026-81381). The setting was removed in VS Code 1.136.2, where it does nothing; on 1.136.1 and earlier it applies from this file. Remove it")
+			add(finding.Warn, key+" is \""+strings.TrimSpace(v)+"\": Copilot sent the Azure DevOps access token to this endpoint for code search (CVE-2026-81381, CVE-2026-102231). The setting was removed in VS Code 1.136.2, where it does nothing; on 1.136.1 and earlier it applies from this file. Remove it")
 		}
 	}
 	if v, ok := s.BoolField("terminal.integrated.allowInUntrustedWorkspace"); ok && v && s.Nested("terminal.integrated.allowInUntrustedWorkspace") {
