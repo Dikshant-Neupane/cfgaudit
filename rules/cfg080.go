@@ -19,10 +19,6 @@ func init() { All = append(All, CFG080) }
 
 func (r *cfg080) ID() string { return "CFG080" }
 
-// htmlCommentRe captures the body of an HTML comment, including multi-line ones
-// (the (?s) flag lets `.` span newlines). Submatch 1 is the comment text.
-var htmlCommentRe = regexp.MustCompile(`(?s)<!--(.*?)-->`)
-
 // mdCommentRe captures the title of a Markdown link reference definition whose
 // destination is "#" or "<>", the idiom `[//]: # (text)` that Markdown writers
 // use as a comment (#621). A link reference definition does not render
@@ -39,13 +35,80 @@ type commentSpan struct {
 	kind  string
 }
 
+// htmlCommentSpans returns every HTML comment in content, ending each one the
+// way the HTML tokenizer does. A "<!--" that starts a line (up to three spaces
+// of indent) opens an HTML block: it ends at "-->" or "--!>", and one that is
+// never closed hides everything after the marker (#971), so it runs to the end
+// of content. Elsewhere it is inline HTML, which only forms a comment when
+// closed with "-->" (plus the abrupt empty forms "<!-->" and "<!--->"); an
+// unclosed mid-line "<!--" stays visible text and is not a comment, so the
+// directive after it is not concealed (review on #971).
+func htmlCommentSpans(content string) []commentSpan {
+	var out []commentSpan
+	for offset := 0; ; {
+		i := strings.Index(content[offset:], "<!--")
+		if i < 0 {
+			return out
+		}
+		start := offset + i
+		body, next, ok := htmlCommentBody(content, start+len("<!--"), startsLine(content, start))
+		if !ok {
+			offset = start + len("<!--")
+			continue
+		}
+		out = append(out, commentSpan{body: body, start: start, kind: "an HTML comment (<!-- … -->"})
+		if next >= len(content) {
+			return out
+		}
+		offset = next
+	}
+}
+
+// startsLine reports whether off begins a line after at most three spaces of
+// indentation, the CommonMark condition for an HTML block.
+func startsLine(content string, off int) bool {
+	lineStart := strings.LastIndexByte(content[:off], '\n') + 1
+	indent := content[lineStart:off]
+	return len(indent) <= 3 && strings.Trim(indent, " ") == ""
+}
+
+// htmlCommentBody returns the body of the comment whose text starts at
+// bodyStart, the offset just past its closing delimiter, and whether it is a
+// comment at all. block selects HTML-block rules: "--!>" also closes, and an
+// unclosed comment returns the rest of content with next == len(content).
+// Inline (mid-line) comments close only with "-->"; an unclosed one is visible
+// text, reported with ok == false.
+func htmlCommentBody(content string, bodyStart int, block bool) (string, int, bool) {
+	rest := content[bodyStart:]
+	// "<!-->" and "<!--->" are complete empty comments, not an opener followed
+	// by visible text (HTML tokenizer: abrupt-closing-of-empty-comment).
+	if strings.HasPrefix(rest, ">") {
+		return "", bodyStart + 1, true
+	}
+	if strings.HasPrefix(rest, "->") {
+		return "", bodyStart + 2, true
+	}
+	end, term := -1, 0
+	if i := strings.Index(rest, "-->"); i >= 0 {
+		end, term = i, len("-->")
+	}
+	if block {
+		if i := strings.Index(rest, "--!>"); i >= 0 && (end < 0 || i < end) {
+			end, term = i, len("--!>")
+		}
+		if end < 0 {
+			return rest, len(content), true
+		}
+	} else if end < 0 {
+		return "", 0, false
+	}
+	return rest[:end], bodyStart + end + term, true
+}
+
 // commentSpans returns every HTML comment and Markdown link-reference comment
 // in content.
 func commentSpans(content string) []commentSpan {
-	var out []commentSpan
-	for _, loc := range htmlCommentRe.FindAllStringSubmatchIndex(content, -1) {
-		out = append(out, commentSpan{body: content[loc[2]:loc[3]], start: loc[0], kind: "an HTML comment (<!-- … -->"})
-	}
+	out := htmlCommentSpans(content)
 	for _, loc := range mdCommentRe.FindAllStringSubmatchIndex(content, -1) {
 		for g := 1; g <= 3; g++ {
 			if loc[2*g] >= 0 {
