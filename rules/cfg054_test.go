@@ -32,15 +32,57 @@ func TestCFG054_MCPEnvAndHeaders(t *testing.T) {
 	}
 }
 
+func TestCFG054_JSONValueLeaves(t *testing.T) {
+	// A JSON object stored as a string value is walked leaf by leaf, so a
+	// harmless header blob is not scored as a single high-entropy token.
+	tg := &Target{
+		Scope:          finding.ScopeProject,
+		ProjectMCPFile: ".mcp.json",
+		ProjectMCP: map[string]parser.MCPServer{"db": {
+			Env: map[string]string{"EXAMPLE_HEADERS": `{"User-Agent":"example.client"}`},
+		}},
+	}
+	if f := CFG054.Check(tg); len(f) != 0 {
+		t.Fatalf("expected no finding for a JSON header blob, got %+v", f)
+	}
+
+	// A secret inside such a value is still reported, on the leaf.
+	tg.ProjectMCP["db"] = parser.MCPServer{
+		Env: map[string]string{"EXAMPLE_HEADERS": `{"Authorization":"a8Kd92Lmz0Qw3RtY7bVx1NpC4"}`},
+	}
+	f := CFG054.Check(tg)
+	if len(f) != 1 {
+		t.Fatalf("expected 1 finding for a secret inside a JSON value, got %+v", f)
+	}
+	if !strings.Contains(f[0].Message, "env.EXAMPLE_HEADERS.Authorization") {
+		t.Errorf("expected the finding to point at the JSON leaf, got %+v", f[0])
+	}
+
+	// A leaf whose own JSON key ends in _TOKEN is still reported: the
+	// suffix gate applies to the outer env/header name, which CFG007/CFG050
+	// already handle themselves.
+	tg.ProjectMCP["db"] = parser.MCPServer{
+		Env: map[string]string{"EXAMPLE_CONFIG": `{"SERVICE_TOKEN":"a8Kd92Lmz0Qw3RtY7bVx1NpC4"}`},
+	}
+	f = CFG054.Check(tg)
+	if len(f) != 1 {
+		t.Fatalf("expected 1 finding for a secret leaf under a *_TOKEN JSON key, got %+v", f)
+	}
+	if !strings.Contains(f[0].Message, "env.EXAMPLE_CONFIG.SERVICE_TOKEN") {
+		t.Errorf("expected the finding to point at the JSON leaf, got %+v", f[0])
+	}
+}
+
 func TestCFG054_NotFlagged(t *testing.T) {
 	cases := []string{
-		`{"env":{"NODE_ENV":"development"}}`,                       // short, low entropy
-		`{"env":{"GREETING":"hello there friend how are you"}}`,    // whitespace (prose)
-		`{"env":{"BUILD_SHA":"d41d8cd98f00b204e9800998ecf8427e"}}`, // pure hex md5 → 2 classes
-		`{"env":{"PATHY":"/usr/local/share/app/x9KdmzQ1Lp2"}}`,     // path
-		`{"env":{"REF":"$SESSION_KEY"}}`,                           // shell ref
-		`{"env":{"PH":"changeme-changeme-changeme"}}`,              // placeholder-ish / low entropy
-		`{"env":{"API_TOKEN":"a8Kd92Lmz0Qw3RtY7bVx1NpC4"}}`,        // secret-suffix name → CFG007's job, not double-flagged
+		`{"env":{"NODE_ENV":"development"}}`,                                // short, low entropy
+		`{"env":{"GREETING":"hello there friend how are you"}}`,             // whitespace (prose)
+		`{"env":{"BUILD_SHA":"d41d8cd98f00b204e9800998ecf8427e"}}`,          // pure hex md5 → 2 classes
+		`{"env":{"PATHY":"/usr/local/share/app/x9KdmzQ1Lp2"}}`,              // path
+		`{"env":{"REF":"$SESSION_KEY"}}`,                                    // shell ref
+		`{"env":{"PH":"changeme-changeme-changeme"}}`,                       // placeholder-ish / low entropy
+		`{"env":{"API_TOKEN":"a8Kd92Lmz0Qw3RtY7bVx1NpC4"}}`,                 // secret-suffix name → CFG007's job, not double-flagged
+		`{"env":{"EXAMPLE_HEADERS":"{\"User-Agent\":\"example.client\"}"}}`, // JSON value: header blob, not one token
 	}
 	for _, c := range cases {
 		if f := CFG054.Check(settingsTarget(t, c)); len(f) != 0 {

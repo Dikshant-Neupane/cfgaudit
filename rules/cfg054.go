@@ -4,7 +4,10 @@
 package rules
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/cfgaudit/cfgaudit/internal/finding"
@@ -47,21 +50,21 @@ func (r *cfg054) Check(t *Target) []finding.Finding {
 
 	if t.Settings != nil {
 		for _, k := range sortedKeys(t.Settings.Env) {
-			if looksLikeSecretEntropy(k, t.Settings.Env[k]) {
-				emit("env."+k, t.SettingsFile)
+			if hit, sub := looksLikeSecretEntropy(k, t.Settings.Env[k]); hit {
+				emit("env."+k+sub, t.SettingsFile)
 			}
 		}
 	}
 	for _, ref := range t.mcpServerRefs() {
 		base := "mcpServers." + ref.Name
 		for _, k := range sortedKeys(ref.Server.Env) {
-			if looksLikeSecretEntropy(k, ref.Server.Env[k]) {
-				emit(base+".env."+k, ref.File)
+			if hit, sub := looksLikeSecretEntropy(k, ref.Server.Env[k]); hit {
+				emit(base+".env."+k+sub, ref.File)
 			}
 		}
 		for _, k := range sortedKeys(ref.Server.Headers) {
-			if looksLikeSecretEntropy(k, ref.Server.Headers[k]) {
-				emit(base+".headers."+k, ref.File)
+			if hit, sub := looksLikeSecretEntropy(k, ref.Server.Headers[k]); hit {
+				emit(base+".headers."+k+sub, ref.File)
 			}
 		}
 	}
@@ -69,7 +72,80 @@ func (r *cfg054) Check(t *Target) []finding.Finding {
 }
 
 // looksLikeSecretEntropy applies the conservative gates described on Check.
-func looksLikeSecretEntropy(key, value string) bool {
+//
+// A value that holds a JSON object or array is not scored as one token: the
+// quotes, braces and colon inflate its character classes and its entropy, so a
+// harmless header blob reads like a secret. The parsed value is walked instead
+// and every string leaf is gated on its own, keyed by its JSON path.
+//
+// The second return value is the path of the offending leaf inside the JSON
+// value ("" when the whole value is the offender), so the finding can point at
+// the leaf rather than the whole blob.
+func looksLikeSecretEntropy(key, value string) (bool, string) {
+	v := strings.TrimSpace(value)
+	if leaves, ok := jsonStringLeaves(v); ok {
+		for _, leaf := range leaves {
+			// Gate the leaf on the outer env/header name, not on the leaf's own
+			// JSON key: CFG007/CFG050 only ever see the outer name, so a leaf
+			// under a *_TOKEN/_SECRET/_PASSWORD key would otherwise go
+			// unreported.
+			if leafLooksLikeSecret(key, leaf.value) {
+				return true, leaf.path
+			}
+		}
+		return false, ""
+	}
+	return leafLooksLikeSecret(key, v), ""
+}
+
+// jsonLeaf is a string leaf of a JSON object or array value.
+type jsonLeaf struct {
+	// path locates the leaf inside the parsed value, e.g. ".User-Agent" or
+	// ".items[0]".
+	path string
+	// value is the leaf's string content.
+	value string
+}
+
+// jsonStringLeaves parses value as a JSON object or array and returns its
+// string leaves. ok is false when value is not a JSON object or array.
+func jsonStringLeaves(value string) ([]jsonLeaf, bool) {
+	v := strings.TrimSpace(value)
+	if !strings.HasPrefix(v, "{") && !strings.HasPrefix(v, "[") {
+		return nil, false
+	}
+	var decoded any
+	if err := json.Unmarshal([]byte(v), &decoded); err != nil {
+		return nil, false
+	}
+	var leaves []jsonLeaf
+	var walk func(node any, path string)
+	walk = func(node any, path string) {
+		switch n := node.(type) {
+		case map[string]any:
+			keys := make([]string, 0, len(n))
+			for k := range n {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, k := range keys {
+				walk(n[k], path+"."+k)
+			}
+		case []any:
+			for i, child := range n {
+				walk(child, fmt.Sprintf("%s[%d]", path, i))
+			}
+		case string:
+			leaves = append(leaves, jsonLeaf{path: path, value: n})
+		}
+	}
+	walk(decoded, "")
+	return leaves, true
+}
+
+// leafLooksLikeSecret applies the conservative gates described on Check to a
+// single value.
+func leafLooksLikeSecret(key, value string) bool {
 	v := strings.TrimSpace(value)
 	if len(v) < entropyMinLen {
 		return false
