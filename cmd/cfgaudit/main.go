@@ -2302,8 +2302,9 @@ func loadCursorPermissionsOptional(path string) (*parser.CursorPermissions, erro
 }
 
 // loadZedDebugOptional parses .zed/debug.json, returning (nil, nil) when it does
-// not exist. A malformed file is an error, so a debug file that is silently not
-// being scanned is reported rather than treated as empty.
+// not exist. A malformed file is reported as CFG109 via skipUnreadable, so a
+// debug file that is silently not being scanned is reported rather than
+// treated as empty.
 func loadZedDebugOptional(path string) (*parser.ZedDebug, error) {
 	z, err := parser.ParseZedDebug(path)
 	if err != nil {
@@ -2679,8 +2680,9 @@ func loadGrokHooksOptional(path string) (*parser.GrokHooks, error) {
 }
 
 // loadZedSettingsOptional parses .zed/settings.json, or (nil, nil) when the file
-// does not exist. A malformed file is an error, so a Zed config that is silently
-// not being scanned is reported rather than mistaken for empty.
+// does not exist. A malformed file is reported as CFG109 via skipUnreadable, so
+// a Zed config that is silently not being scanned is reported rather than
+// mistaken for empty.
 func loadZedSettingsOptional(path string) (*parser.ZedSettings, error) {
 	z, err := parser.ParseZedSettings(path)
 	if err != nil {
