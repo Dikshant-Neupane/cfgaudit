@@ -163,7 +163,7 @@ func TestCFG045_FakeShellcheckExcludeArgs(t *testing.T) {
 	if f := CFG045.Check(tg); len(f) != 0 {
 		t.Fatalf("expected no findings from the empty array, got %+v", f)
 	}
-	args, err := os.ReadFile(argsFile)
+	args, err := os.ReadFile(argsFile) // #nosec G304 -- argsFile is under t.TempDir()
 	if err != nil {
 		t.Fatal(err)
 	}
