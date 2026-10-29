@@ -115,6 +115,45 @@ func TestCFG028_MessageNamesTrustFile(t *testing.T) {
 	}
 }
 
+func TestCFG028_OtherAgentTrustFiles(t *testing.T) {
+	for _, cmd := range []string{
+		"echo x > .cursor/mcp.json",
+		"cp /tmp/evil .cursor/cli.json",
+		"cp x .claude/hooks/run.sh",
+		"echo x > .roo/settings.json",
+		"echo x > .gemini/settings.json",
+		"echo x > .codex/config.toml",
+		"echo x > .vscode/mcp.json",
+	} {
+		f := CFG028.Check(hookTarget(t, cmd))
+		if len(f) != 1 || f[0].Severity != finding.Error {
+			t.Errorf("expected Error for other-agent config write %q, got %+v", cmd, f)
+		}
+		if len(f) == 1 && !strings.Contains(f[0].Message, "agent trust/config file") {
+			t.Errorf("expected a generic agent trust/config message for %q, got %s", cmd, f[0].Message)
+		}
+	}
+}
+
+func TestCFG028_BackupFiles_NoFinding(t *testing.T) {
+	for _, cmd := range []string{
+		"cp a CLAUDE.md.bak",
+		"cp settings.json settings.json.orig",
+		"cp .mcp.json .mcp.json.bak",
+		"cp .mcp.json .mcp.json.local",
+	} {
+		if f := CFG028.Check(hookTarget(t, cmd)); len(f) != 0 {
+			t.Errorf("expected no finding for trust-file backup %q, got %+v", cmd, f)
+		}
+	}
+}
+
+func TestCFG028_OtherVSCodeConfig_NoFinding(t *testing.T) {
+	if f := CFG028.Check(hookTarget(t, "echo x > .vscode/launch.json")); len(f) != 0 {
+		t.Errorf("expected no finding for unrelated VS Code configuration, got %+v", f)
+	}
+}
+
 func TestCFG028_NoSettings_NoFinding(t *testing.T) {
 	if f := CFG028.Check(&Target{}); len(f) != 0 {
 		t.Errorf("expected no finding without settings, got %+v", f)
