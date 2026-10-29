@@ -75,9 +75,9 @@ func TestBuildTargets_KimiAgentsPair1011(t *testing.T) {
 
 // When both spellings exist on a case-sensitive filesystem, both are
 // scanned: each is a file a reader might trust. On a case-insensitive
-// filesystem both spellings are the same file, so the pair collapses to
-// one entry by file identity and exactly one finding is the correct
-// deduped result.
+// filesystem both spellings are the same file, so the second of the pair
+// is dropped when os.SameFile says both paths are the same file, and
+// exactly one finding is the correct deduped result.
 func TestBuildTargets_KimiAgentsPairBoth1011(t *testing.T) {
 	proj := t.TempDir()
 	mustWrite(t, filepath.Join(proj, "AGENTS.md"), injection1011)
@@ -91,11 +91,11 @@ func TestBuildTargets_KimiAgentsPairBoth1011(t *testing.T) {
 	}
 }
 
-// A symlinked alias of AGENTS.md must not double-report: the pair is
-// collapsed by file identity, the same guard the directory listing gives
-// a case-insensitive filesystem. The setup needs two distinct names
-// differing only by case, which cannot exist on a case-insensitive
-// filesystem, so the test is skipped there.
+// A symlinked alias of AGENTS.md must not double-report: the second of
+// the pair is dropped when os.SameFile says both paths are the same file,
+// the same guard a case-insensitive filesystem gets. The setup needs two
+// distinct names differing only by case, which cannot exist on a
+// case-insensitive filesystem, so the test is skipped there.
 func TestBuildTargets_KimiAgentsPairSymlink1011(t *testing.T) {
 	proj := t.TempDir()
 	if dirCaseInsensitive(t, proj) {

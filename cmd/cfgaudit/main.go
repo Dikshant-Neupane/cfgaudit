@@ -1148,12 +1148,15 @@ var (
 		filepath.Join(".claude", "CLAUDE.md"),
 		"CLAUDE.local.md",
 		filepath.Join(".claude", "AGENTS.md"),
-		// The root AGENTS pair itself is NOT listed here: instructionTargets
-		// expands it from the scan-root directory listing (rootAgentsPairFiles,
-		// #1011), so a case-insensitive filesystem yields one entry, never
-		// two reads of the same file. Kimi Code loads exactly "AGENTS.md"
+		// The root AGENTS pair (#1011): Kimi Code loads exactly "AGENTS.md"
 		// and "agents.md" (AGENTS_MD_PLAIN_NAMES); "Agents.md" is not loaded
-		// and is deliberately not matched.
+		// and is deliberately not matched. Both fixed paths are listed, as
+		// the agents do: on a case-insensitive filesystem opening
+		// "AGENTS.md" also finds a file spelled "Agents.md", and
+		// instructionTargets drops the second of the pair when os.SameFile
+		// says both paths are the same file, so the file is never read twice.
+		"AGENTS.md",
+		"agents.md",
 		// Kimi Code's project instruction file under its config directory
 		// (#1011): dotKimiAgentsMdPath builds .kimi-code/AGENTS.md.
 		filepath.Join(".kimi-code", "AGENTS.md"),
@@ -1176,10 +1179,9 @@ var (
 	// custom walk (Go's filepath.Glob is case-sensitive) — so it is left to a
 	// separate decision rather than folded into this list. This is the same
 	// case-sensitivity surface CFG028 already reasons about for trust files.
-	// The one exception is the root AGENTS pair, which instructionTargets
-	// expands from the directory listing (#1011): Kimi Code loads exactly
-	// `AGENTS.md` and `agents.md`, and the listing keeps a case-insensitive
-	// filesystem from reading the same file twice.
+	// The root AGENTS pair is listed as fixed paths in agentInstructionFiles
+	// above, and instructionTargets drops the second of the pair when
+	// os.SameFile says both paths are the same file (#1011).
 	agentInstructionGlobs = []string{
 		// .cursor/rules/*.mdc is walked recursively (see filteredInstructionDirs).
 		// A plain .md there is ignored by Cursor's rules system ("Project rules
@@ -1307,51 +1309,6 @@ var (
 // non-empty file. With includeUser it also scans the user-global
 // ~/.claude/agents and ~/.claude/commands. ProjectDir is intentionally unset so
 // file-based rules (e.g. CFG013) don't fire per file.
-// rootAgentsPairFiles returns the scan-root entries Kimi Code loads as its
-// project instruction file (AGENTS_MD_PLAIN_NAMES in kimi-code's
-// agent/profile/context.ts): exactly "AGENTS.md" and "agents.md" (#1011).
-// The names come from the directory listing rather than two fixed paths, so
-// on a case-insensitive filesystem the pair yields one entry, never two
-// reads of the same file (which would report every finding twice). A
-// mixed-case "Agents.md" is deliberately not matched: Kimi Code does not
-// load it. Entries resolving to the same file (a symlinked alias) are
-// collapsed to one, by file identity.
-func rootAgentsPairFiles(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if scanroot.IsAbsent(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var out []string
-	var seen []os.FileInfo
-	for _, e := range entries {
-		if e.Name() != "AGENTS.md" && e.Name() != "agents.md" {
-			continue
-		}
-		p := filepath.Join(dir, e.Name())
-		info, err := os.Stat(p)
-		if err != nil || info.IsDir() {
-			continue
-		}
-		dup := false
-		for _, s := range seen {
-			if os.SameFile(s, info) {
-				dup = true
-				break
-			}
-		}
-		if dup {
-			continue
-		}
-		seen = append(seen, info)
-		out = append(out, p)
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
 func instructionTargets(dir string, includeUser bool) ([]*rules.Target, error) {
 	type scopedPath struct {
 		path  string
@@ -1359,19 +1316,17 @@ func instructionTargets(dir string, includeUser bool) ([]*rules.Target, error) {
 	}
 	var paths []scopedPath
 	for _, rel := range agentInstructionFiles {
-		paths = append(paths, scopedPath{filepath.Join(dir, rel), finding.ScopeProject})
-		// The root AGENTS pair follows the .claude pair, where "AGENTS.md"
-		// sat in this list: it is expanded from the directory listing, not
-		// from two fixed paths, so the same file is never read twice (#1011).
-		if rel == filepath.Join(".claude", "AGENTS.md") {
-			pair, err := rootAgentsPairFiles(dir)
-			if err != nil {
-				return nil, err
-			}
-			for _, m := range pair {
-				paths = append(paths, scopedPath{m, finding.ScopeProject})
+		// The root AGENTS pair (#1011): drop "agents.md" when it resolves
+		// to the same file as "AGENTS.md" (a case-insensitive filesystem,
+		// or a symlinked alias), so the file is never read twice.
+		if rel == "agents.md" {
+			upper, upperErr := os.Stat(filepath.Join(dir, "AGENTS.md"))
+			lower, lowerErr := os.Stat(filepath.Join(dir, "agents.md"))
+			if upperErr == nil && lowerErr == nil && os.SameFile(upper, lower) {
+				continue
 			}
 		}
+		paths = append(paths, scopedPath{filepath.Join(dir, rel), finding.ScopeProject})
 	}
 	addGlobs := func(base string, globs []string, scope finding.Scope) error {
 		for _, pat := range globs {
