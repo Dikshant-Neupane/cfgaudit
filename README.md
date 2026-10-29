@@ -625,6 +625,8 @@ Cursor 2.5 also added **`.cursor/sandbox.json`**, the profile bounding what agen
 
 **Gemini's project agents live in `.gemini/agents/*.md`**, which its docs list as *"Project-level … Shared with your team"*. cfgaudit scans them as instruction content and decodes the frontmatter's `mcp_servers` mapping onto the shared MCP rules, folding Gemini's `http_url` spelling into the URL the rules read (the key is snake_case `mcp_servers`; `mcpServers` is only the internal name after conversion, and the local-agent schema is `.strict()`, so writing it would make Gemini reject the file), so a cleartext endpoint (CFG049) or a secret-bearing `headers` value (CFG050) declared in a committed agent file is caught. Discovery mirrors Gemini's own loader rather than a plain glob: a single directory read with **no recursion**, `.md` only, and names starting with `_` skipped, because reporting an `_draft.md` would claim a finding in a file Gemini never loads.
 
+Gemini CLI workspace skills live in `.gemini/skills` and are scanned as instruction content too: a top level `.gemini/skills/SKILL.md` and a one deep `.gemini/skills/*/SKILL.md` get the same content findings as a skill under `.agents/skills`, and `~/.gemini/skills` is covered with `--user`.
+
 The three remaining fields are covered by [CFG096](docs/rules/CFG096.md) (the per-server `trust` flag, which skips the confirmation prompt once the folder is trusted, and which is equally live in `.gemini/settings.json`) and [CFG097](docs/rules/CFG097.md) (a **remote** agent whose `agent_card_url` is cleartext, or whose `auth` block carries a credential literal instead of a `$VAR` reference).
 
 ### OpenAI Codex CLI — `.codex/config.toml` & `AGENTS.md`
