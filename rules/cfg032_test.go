@@ -73,7 +73,7 @@ func TestCFG032_PartB_RoleTagAndSysInstr(t *testing.T) {
 }
 
 func TestCFG032_PartC_ForeignTokens_Warn(t *testing.T) {
-	for _, s := range []string{"<|im_start|>system", "text <<SYS>> more", "<s>[INST] do x [/INST]", "<|assistant|>"} {
+	for _, s := range []string{"<|im_start|>system", "text <<SYS>> more", "<s>[INST] do x [/INST]", "<|assistant|>", "<|endoftext|>", "<|eot_id|>", "<|start_header_id|>system<|end_header_id|>"} {
 		f := CFG032.Check(claudeMDTarget(s))
 		if len(f) == 0 || f[0].Severity != finding.Warn || !strings.Contains(f[0].Message, "Part C") {
 			t.Errorf("expected Part C Warn for %q, got %+v", s, f)

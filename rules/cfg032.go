@@ -47,7 +47,7 @@ var (
 	turnBoundary = regexp.MustCompile(`\n\n(?:Human|Assistant):\s`)
 	roleTagRe    = regexp.MustCompile(`(?is)<(human|assistant)>.*?</(?:human|assistant)>`)
 	sysInstrRe   = mustFiltered(`(?m)^System Instruction:\s`)
-	foreignToken = mustFiltered(`<\|im_start\|>|<\|im_end\|>|<s>\[INST\]|\[/INST\]|<<SYS>>|<</SYS>>|<\|system\|>|<\|user\|>|<\|assistant\|>`)
+	foreignToken = mustFiltered(`<\|im_start\|>|<\|im_end\|>|<s>\[INST\]|\[/INST\]|<<SYS>>|<</SYS>>|<\|system\|>|<\|user\|>|<\|assistant\|>|<\|endoftext\|>|<\|eot_id\|>|<\|start_header_id\|>|<\|end_header_id\|>`)
 )
 
 // Check scans CLAUDE.md for pseudo-system markup and role-injection tokens.
