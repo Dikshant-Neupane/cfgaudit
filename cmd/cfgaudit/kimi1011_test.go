@@ -50,7 +50,10 @@ func dirCaseInsensitive(t *testing.T, dir string) bool {
 }
 
 // #1011: Kimi Code loads agents.md and .kimi-code/AGENTS.md as project
-// instruction files, alongside AGENTS.md; it does not load Agents.md.
+// instruction files, alongside AGENTS.md; it does not load Agents.md on a
+// case-sensitive filesystem. On a case-insensitive filesystem opening
+// AGENTS.md reaches a file spelled Agents.md, exactly as the agents reach
+// it, so it is scanned there.
 func TestBuildTargets_KimiAgentsPair1011(t *testing.T) {
 	for _, tc := range []struct {
 		rel     string
@@ -63,11 +66,15 @@ func TestBuildTargets_KimiAgentsPair1011(t *testing.T) {
 	} {
 		proj := t.TempDir()
 		mustWrite(t, filepath.Join(proj, filepath.FromSlash(tc.rel)), injection1011)
+		scanned := tc.scanned
+		if tc.rel == "Agents.md" && dirCaseInsensitive(t, proj) {
+			scanned = true
+		}
 		got := countCFG026(t, proj)
-		if tc.scanned && len(got) != 1 {
+		if scanned && len(got) != 1 {
 			t.Errorf("%s: expected exactly 1 CFG026 finding, got %d", tc.rel, len(got))
 		}
-		if !tc.scanned && len(got) != 0 {
+		if !scanned && len(got) != 0 {
 			t.Errorf("%s: expected no CFG026 finding, got %d", tc.rel, len(got))
 		}
 	}
