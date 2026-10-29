@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	cfgaudit "github.com/cfgaudit/cfgaudit"
 )
 
 func TestList_Text(t *testing.T) {
@@ -107,5 +109,67 @@ func TestSummarize_NoMCPMapping(t *testing.T) {
 	doc := "# CFG998 — a thing\n\n**Severity:** `error`\n**OWASP:** [LLM01:2026 – Prompt Injection](https://x)\n"
 	if s := summarize("CFG998", doc); s.OWASPMCP != "" {
 		t.Errorf("expected empty OWASPMCP for a non-MCP rule, got %q", s.OWASPMCP)
+	}
+}
+
+func TestDocAgents(t *testing.T) {
+	got, ok := docAgents("# CFG999 — x\n\n**Severity:** `error`\n**Agents:** cursor, Claude-Code, `vscode`, cursor\n")
+	if !ok || strings.Join(got, ",") != "claude-code,cursor,vscode" {
+		t.Errorf("docAgents = %v, %v", got, ok)
+	}
+	if got, ok := docAgents("# CFG999 — x\n"); ok || got == nil || len(got) != 0 {
+		t.Errorf("a doc without the line gives an empty, non-nil list and false, got %v, %v", got, ok)
+	}
+}
+
+// #1036: every rule doc has an "**Agents:**" line that names at least one
+// agent, and only known ones.
+func TestList_AgentsLines(t *testing.T) {
+	for _, id := range cfgaudit.RuleIDs() {
+		doc, _ := cfgaudit.RuleDoc(id)
+		agents, ok := docAgents(doc)
+		if !ok {
+			t.Errorf("%s: no **Agents:** line; add one next to Severity and OWASP (see CONTRIBUTING)", id)
+			continue
+		}
+		if len(agents) == 0 {
+			t.Errorf("%s: empty **Agents:** line", id)
+		}
+		for _, a := range agents {
+			if knownAgents[a] == "" {
+				t.Errorf("%s: unknown agent %q; add it to knownAgents first", id, a)
+			}
+		}
+	}
+}
+
+func TestList_AgentFilter(t *testing.T) {
+	out, code := listOutput([]string{"--format", "json", "--agent", "Cursor"})
+	if code != 0 {
+		t.Fatalf("expected exit 0, got %d: %s", code, out)
+	}
+	var rules []ruleSummary
+	if err := json.Unmarshal([]byte(out), &rules); err != nil {
+		t.Fatal(err)
+	}
+	if len(rules) == 0 {
+		t.Fatal("expected some rules for cursor")
+	}
+	for _, r := range rules {
+		if !contains(r.Agents, "cursor") {
+			t.Errorf("filter leaked a rule without cursor: %+v", r)
+		}
+	}
+	if out, code := listOutput([]string{"--agent", "nope"}); code != 2 || !strings.Contains(out, "unknown agent") {
+		t.Errorf("unknown agent: exit %d, %q", code, out)
+	}
+}
+
+// The JSON always carries an agents array, also for a rule not classified yet,
+// so a consumer never meets null.
+func TestList_AgentsAlwaysArray(t *testing.T) {
+	out, _ := listOutput([]string{"--format", "json"})
+	if strings.Contains(out, `"agents": null`) {
+		t.Error("agents is null for some rule")
 	}
 }
