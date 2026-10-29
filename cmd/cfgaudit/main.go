@@ -1262,6 +1262,12 @@ var (
 		filepath.Join(".qwen", "agents", "*.md"),
 		filepath.Join(".qwen", "commands", "*.md"),
 		filepath.Join(".qwen", "skills", "*", "SKILL.md"),
+		// Gemini CLI workspace skills (#1015). Gemini CLI v0.65.0 loads
+		// workspace skills from `.gemini/skills`, matching `SKILL.md` and
+		// `*/SKILL.md` (packages/core/src/config/storage.ts `getProjectSkillsDir`,
+		// used in skills/skillManager.ts), trusted folders only.
+		filepath.Join(".gemini", "skills", "SKILL.md"),
+		filepath.Join(".gemini", "skills", "*", "SKILL.md"),
 		// qwen output styles, the twin of .claude/output-styles above. The body of
 		// the named file is appended to the system prompt verbatim; a committed
 		// .qwen/settings.json `general.outputStyle` selects it, and folder trust is
@@ -1275,7 +1281,9 @@ var (
 		filepath.Join(".claude", "agents", "*.md"),
 		filepath.Join(".claude", "skills", "*", "SKILL.md"),
 		filepath.Join(".gemini", "GEMINI.md"), // Gemini CLI user-global instruction file
-		filepath.Join(".qwen", "QWEN.md"),     // qwen-code user-global instruction file
+		filepath.Join(".gemini", "skills", "SKILL.md"),
+		filepath.Join(".gemini", "skills", "*", "SKILL.md"),
+		filepath.Join(".qwen", "QWEN.md"), // qwen-code user-global instruction file
 		// The user half of the output-style surface. loadRules' Claude twin is
 		// covered by recursiveInstructionDirs, which is walked under $HOME too.
 		filepath.Join(".qwen", "output-styles", "*.md"),
