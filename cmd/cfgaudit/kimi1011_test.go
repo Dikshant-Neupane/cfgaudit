@@ -37,7 +37,7 @@ func dirCaseInsensitive(t *testing.T, dir string) bool {
 	if err := os.WriteFile(probe, []byte("probe"), 0o600); err != nil {
 		t.Fatalf("case probe write: %v", err)
 	}
-	defer os.Remove(probe)
+	defer func() { _ = os.Remove(probe) }()
 	lower, err := os.Stat(probe)
 	if err != nil {
 		t.Fatalf("case probe stat: %v", err)
