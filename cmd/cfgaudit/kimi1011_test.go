@@ -26,6 +26,29 @@ func countCFG026(t *testing.T, dir string) []string {
 	return files
 }
 
+// dirCaseInsensitive reports whether dir sits on a case-insensitive
+// filesystem, probed at runtime rather than inferred from GOOS: a macOS
+// volume can be case-sensitive, and a Linux mount can be
+// case-insensitive. It writes a lowercase probe file and checks whether
+// the uppercase variant stats as the same file.
+func dirCaseInsensitive(t *testing.T, dir string) bool {
+	t.Helper()
+	probe := filepath.Join(dir, "caseprobe1011")
+	if err := os.WriteFile(probe, []byte("probe"), 0o600); err != nil {
+		t.Fatalf("case probe write: %v", err)
+	}
+	defer os.Remove(probe)
+	lower, err := os.Stat(probe)
+	if err != nil {
+		t.Fatalf("case probe stat: %v", err)
+	}
+	upper, err := os.Stat(filepath.Join(dir, "CASEPROBE1011"))
+	if err != nil {
+		return false
+	}
+	return os.SameFile(lower, upper)
+}
+
 // #1011: Kimi Code loads agents.md and .kimi-code/AGENTS.md as project
 // instruction files, alongside AGENTS.md; it does not load Agents.md.
 func TestBuildTargets_KimiAgentsPair1011(t *testing.T) {
@@ -51,21 +74,33 @@ func TestBuildTargets_KimiAgentsPair1011(t *testing.T) {
 }
 
 // When both spellings exist on a case-sensitive filesystem, both are
-// scanned: each is a file a reader might trust.
+// scanned: each is a file a reader might trust. On a case-insensitive
+// filesystem both spellings are the same file, so the pair collapses to
+// one entry by file identity and exactly one finding is the correct
+// deduped result.
 func TestBuildTargets_KimiAgentsPairBoth1011(t *testing.T) {
 	proj := t.TempDir()
 	mustWrite(t, filepath.Join(proj, "AGENTS.md"), injection1011)
 	mustWrite(t, filepath.Join(proj, "agents.md"), injection1011)
-	if got := countCFG026(t, proj); len(got) != 2 {
-		t.Errorf("both spellings present: expected 2 CFG026 findings, got %d", len(got))
+	want := 2
+	if dirCaseInsensitive(t, proj) {
+		want = 1
+	}
+	if got := countCFG026(t, proj); len(got) != want {
+		t.Errorf("both spellings present: expected %d CFG026 findings, got %d", want, len(got))
 	}
 }
 
 // A symlinked alias of AGENTS.md must not double-report: the pair is
 // collapsed by file identity, the same guard the directory listing gives
-// a case-insensitive filesystem.
+// a case-insensitive filesystem. The setup needs two distinct names
+// differing only by case, which cannot exist on a case-insensitive
+// filesystem, so the test is skipped there.
 func TestBuildTargets_KimiAgentsPairSymlink1011(t *testing.T) {
 	proj := t.TempDir()
+	if dirCaseInsensitive(t, proj) {
+		t.Skip("skipping: a case-insensitive filesystem cannot hold AGENTS.md and agents.md as distinct names, so the symlinked alias setup cannot exist there")
+	}
 	mustWrite(t, filepath.Join(proj, "AGENTS.md"), injection1011)
 	if err := os.Symlink(filepath.Join(proj, "AGENTS.md"), filepath.Join(proj, "agents.md")); err != nil {
 		t.Fatalf("symlink: %v", err)
