@@ -388,6 +388,22 @@ Pin the component to a released tag, not a moving ref — consistent with cfgaud
 
 ---
 
+## pre-commit hook
+
+For projects that use the [pre-commit framework](https://pre-commit.com/), add the hook to `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/cfgaudit/cfgaudit
+    rev: vX.Y.Z  # a release that includes .pre-commit-hooks.yaml (the release after v1.19.0 or later)
+    hooks:
+      - id: cfgaudit
+```
+
+The hook scans the whole repository on every commit: cfgaudit audits a directory, not a list of files, so the hook definition sets `pass_filenames: false` and `always_run: true`. Pin `rev` to a released tag, not a moving ref, as with the GitLab component above. The hook is built from source by pre-commit, so using it requires a Go toolchain. Note that pre-commit builds the hook without the release `-ldflags`, so its output reports `cfgaudit dev` rather than a version number.
+
+---
+
 ## Claude Code plugin
 
 The repo doubles as a Claude Code plugin marketplace. Install it to get an on-demand scan command plus automatic scans when config files change:

@@ -1,0 +1,10 @@
+# Copyright the cfgaudit contributors
+# SPDX-License-Identifier: Apache-2.0
+
+- id: cfgaudit
+  name: cfgaudit
+  description: Audit AI coding agent configuration
+  entry: cfgaudit
+  language: golang
+  pass_filenames: false
+  always_run: true
