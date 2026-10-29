@@ -1148,7 +1148,18 @@ var (
 		filepath.Join(".claude", "CLAUDE.md"),
 		"CLAUDE.local.md",
 		filepath.Join(".claude", "AGENTS.md"),
+		// The root AGENTS pair (#1011): Kimi Code loads exactly "AGENTS.md"
+		// and "agents.md" (AGENTS_MD_PLAIN_NAMES); "Agents.md" is not loaded
+		// and is deliberately not matched. Both fixed paths are listed, as
+		// the agents do: on a case-insensitive filesystem opening
+		// "AGENTS.md" also finds a file spelled "Agents.md", and
+		// instructionTargets drops the second of the pair when os.SameFile
+		// says both paths are the same file, so the file is never read twice.
 		"AGENTS.md",
+		"agents.md",
+		// Kimi Code's project instruction file under its config directory
+		// (#1011): dotKimiAgentsMdPath builds .kimi-code/AGENTS.md.
+		filepath.Join(".kimi-code", "AGENTS.md"),
 		// The local sibling of AGENTS.md. Devin CLI's configuration-import
 		// reference lists it among the "standard project rules" it reads
 		// alongside AGENTS.md, AGENT.md and .windsurfrules (#474).
@@ -1168,6 +1179,9 @@ var (
 	// custom walk (Go's filepath.Glob is case-sensitive) — so it is left to a
 	// separate decision rather than folded into this list. This is the same
 	// case-sensitivity surface CFG028 already reasons about for trust files.
+	// The root AGENTS pair is listed as fixed paths in agentInstructionFiles
+	// above, and instructionTargets drops the second of the pair when
+	// os.SameFile says both paths are the same file (#1011).
 	agentInstructionGlobs = []string{
 		// .cursor/rules/*.mdc is walked recursively (see filteredInstructionDirs).
 		// A plain .md there is ignored by Cursor's rules system ("Project rules
@@ -1302,6 +1316,16 @@ func instructionTargets(dir string, includeUser bool) ([]*rules.Target, error) {
 	}
 	var paths []scopedPath
 	for _, rel := range agentInstructionFiles {
+		// The root AGENTS pair (#1011): drop "agents.md" when it resolves
+		// to the same file as "AGENTS.md" (a case-insensitive filesystem,
+		// or a symlinked alias), so the file is never read twice.
+		if rel == "agents.md" {
+			upper, upperErr := os.Stat(filepath.Join(dir, "AGENTS.md"))
+			lower, lowerErr := os.Stat(filepath.Join(dir, "agents.md"))
+			if upperErr == nil && lowerErr == nil && os.SameFile(upper, lower) {
+				continue
+			}
+		}
 		paths = append(paths, scopedPath{filepath.Join(dir, rel), finding.ScopeProject})
 	}
 	addGlobs := func(base string, globs []string, scope finding.Scope) error {
